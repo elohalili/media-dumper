@@ -38,16 +38,24 @@ def main():
 
     # upload file
     file_metadata = {
-        'name': 'todo.txt',
+        'name': 'FILENAME',
         'parents': [folder_id]
     }
-    media = MediaFileUpload('todo.txt',
-                            mimetype='text/plain',
+    print("START UPLOAD")
+    media = MediaFileUpload('FILE_PATH',
+                            mimetype='MIME_TYPE',
                             resumable=True)
-    file = service.files().create(body=file_metadata,
-                                  media_body=media,
-                                  fields='id').execute()
-    print('File ID: %s' % file.get('id'))
+
+    request = service.files().create(body=file_metadata,
+                                     media_body=media,
+                                     fields='id')
+    media.stream()
+    response = None
+    while response is None:
+        status, response = request.next_chunk()
+        if status:
+            print("Uploaded %d%%." % int(status.progress() * 100))
+    print("END UPLOAD")
 
 
 def authenticate():
