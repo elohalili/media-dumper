@@ -1,5 +1,5 @@
 TODOS:
-- implement G drive apis:
+- implement G drive apis: OK
     - test uploading files
     - test uploading files with restricted storage and ram
 - figure out how to read usb media interfaces
