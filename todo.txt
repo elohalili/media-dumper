@@ -1,0 +1,6 @@
+TODOS:
+- implement G drive apis:
+    - test uploading files
+    - test uploading files with restricted storage and ram
+- figure out how to read usb media interfaces
+    - figure out how to upload files directly from the usb
