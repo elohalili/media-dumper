@@ -4,10 +4,13 @@ import os.path
 import pickle
 from pprint import pprint
 
+import magic
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+
+mime = magic.Magic(mime=True)
 
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/drive']
@@ -16,11 +19,20 @@ FOLDER_NAME = '_MEDIA_DUMPER'
 
 
 def main():
+    upload_file('GH011663.MP4', 'E:\\DCIM\\101GOPRO\\GH011663.MP4')
+    # detect usb thumb drive
+    # check if there is DCIM folder
+    # get files from it and upload them
+    return
+
+
+def upload_file(file_name, file_location):
     # authenticate and create a service
     service = build('drive', 'v3', credentials=authenticate())
+
     # check if the folder already exists and get the ID
-    folders_res = service.files().list(q=f"mimeType = 'application/vnd.google-apps.folder' and name = '{FOLDER_NAME}'",
-                                       fields='nextPageToken, files(id, name)').execute()
+    folders_res = service.files().list(
+        q=f"mimeType = 'application/vnd.google-apps.folder' and name = '{FOLDER_NAME}'", fields='nextPageToken, files(id, name)').execute()
     folder_id = None
     if len(folders_res.get('files', [])):
         folder_id = folders_res.get('files', [])[0]['id']
@@ -38,12 +50,12 @@ def main():
 
     # upload file
     file_metadata = {
-        'name': 'FILENAME',
+        'name': file_name,
         'parents': [folder_id]
     }
     print("START UPLOAD")
-    media = MediaFileUpload('FILE_PATH',
-                            mimetype='MIME_TYPE',
+    media = MediaFileUpload(file_location,
+                            mimetype=mime.from_file(file_location),
                             resumable=True)
 
     request = service.files().create(body=file_metadata,
