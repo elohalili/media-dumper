@@ -1,5 +1,8 @@
 from __future__ import print_function
 
+import sys
+import subprocess
+import time
 import os.path
 import pickle
 from pprint import pprint
@@ -17,20 +20,44 @@ SCOPES = ['https://www.googleapis.com/auth/drive']
 
 FOLDER_NAME = '_MEDIA_DUMPER'
 
+def detect_usb_storage():
+    usb_mounting_point = None
+    while not usb_mounting_point:
+        if sys.platform.startswith('linux'):
+            # linux
+            # lsblk -p -o KNAME,MOUNTPOINT | grep dev/sd.*/media (or something like that)
+            # get mount point
+            # ls $MOUNTPOINT and check for DCIM folder
+            process = subprocess.Popen(
+                'lsblk -p -o KNAME,MOUNTPOINT | grep dev/sd.*/media',
+                shell=True,
+                universal_newlines=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
+            stdout, stderr = process.communicate()
+            if len(stdout.strip()):
+                usb_mounting_point = stdout[stdout.index('/media'):].strip()
+                return usb_mounting_point
+        elif sys.platform.startswith('cygwin'):
+            # windows
+            # wmic logicaldisk get caption
+            # and see the default ones such as C or D
+            # then ls E:\\ and check for DCIM folder
+            continue
+        time.sleep(1)
+
+    return usb_mounting_point
 
 def main():
-    upload_file('GH011663.MP4', 'E:\\DCIM\\101GOPRO\\GH011663.MP4')
+
     # detect usb thumb drive
+    print('looking for usb...')
+    print(detect_usb_storage())
+    print('usb found!')
 
-    # windows
-    # wmic logicaldisk get caption
-    # and see the default ones such as C or D
-    # then ls E:\\ and check for DCIM folder
+    # upload_file('GH011663.MP4', 'E:\\DCIM\\101GOPRO\\GH011663.MP4')
 
-    # linux
-    # lsblk -p -S -o KNAME,MOUNTPOINT | grep dev/sb.*/mount (or something like that)
-    # get mount point
-    # ls $MOUNTPOINT and check for DCIM folder
+
 
     # check if there is DCIM folder
     # get files from it and upload them
