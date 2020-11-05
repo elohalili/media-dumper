@@ -3,5 +3,5 @@ TODOS:
     - test uploading files OK
     - test uploading files with restricted storage and ram
 - figure out how to read usb media interfaces
-    - detect usb drive
+    - detect usb drive OK
     - figure out how to upload files directly from the usb

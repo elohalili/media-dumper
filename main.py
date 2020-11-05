@@ -19,8 +19,10 @@ mime = magic.Magic(mime=True)
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
 FOLDER_NAME = '_MEDIA_DUMPER'
+ALLOWED_FILE_TYPES = ['mp4','mp3','cr2','jpg']
 
 def detect_usb_storage():
+    print('looking for usb...')
     usb_mounting_point = None
     while not usb_mounting_point:
         if sys.platform.startswith('linux'):
@@ -32,12 +34,13 @@ def detect_usb_storage():
                 'lsblk -p -o KNAME,MOUNTPOINT | grep dev/sd.*/media',
                 shell=True,
                 universal_newlines=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE)
+                stdout=subprocess.PIPE)
             stdout, stderr = process.communicate()
             if len(stdout.strip()):
-                usb_mounting_point = stdout[stdout.index('/media'):].strip()
-                return usb_mounting_point
+                mounting_point = stdout[stdout.index('/media'):].strip() + '/DCIM/'
+                if os.path.isdir(mounting_point):
+                    usb_mounting_point = mounting_point
+                    break
         elif sys.platform.startswith('cygwin'):
             # windows
             # wmic logicaldisk get caption
@@ -46,16 +49,30 @@ def detect_usb_storage():
             continue
         time.sleep(1)
 
+    print('usb found!')
     return usb_mounting_point
 
 def main():
 
     # detect usb thumb drive
-    print('looking for usb...')
-    print(detect_usb_storage())
-    print('usb found!')
+    usb_device = detect_usb_storage()
 
-    # upload_file('GH011663.MP4', 'E:\\DCIM\\101GOPRO\\GH011663.MP4')
+    listOfFiles = list()
+    for (dirpath, dirnames, filenames) in os.walk(usb_device):
+        parent_dir = dirpath.replace(usb_device, '')
+        parent_dir_id = None
+        for filename in filenames:
+            # error cannot reverse and get... FUCK
+            if filename.split('.').reverse()[0].lower() in ALLOWED_FILE_TYPES:
+                # create parent dir 
+                gdrive_upload_file(filename, dirpath + '/' + filename)
+
+    # list all dirs inside DCIM
+    # if these dirs contains media files
+    # get file list
+    # create a new folder on drive
+    # and start uploading
+
 
 
 
@@ -63,8 +80,10 @@ def main():
     # get files from it and upload them
     return
 
+# def gdrive_create_dir(dirname, parent):
 
-def upload_file(file_name, file_location):
+
+def gdrive_upload_file(file_name, file_location):
     # authenticate and create a service
     service = build('drive', 'v3', credentials=authenticate())
 
