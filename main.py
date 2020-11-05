@@ -21,6 +21,17 @@ FOLDER_NAME = '_MEDIA_DUMPER'
 def main():
     upload_file('GH011663.MP4', 'E:\\DCIM\\101GOPRO\\GH011663.MP4')
     # detect usb thumb drive
+
+    # windows
+    # wmic logicaldisk get caption
+    # and see the default ones such as C or D
+    # then ls E:\\ and check for DCIM folder
+
+    # linux
+    # lsblk -p -S -o KNAME,MOUNTPOINT | grep dev/sb.*/mount (or something like that)
+    # get mount point
+    # ls $MOUNTPOINT and check for DCIM folder
+
     # check if there is DCIM folder
     # get files from it and upload them
     return
