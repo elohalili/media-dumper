@@ -6,6 +6,7 @@ import time
 import os.path
 import pickle
 from pprint import pprint
+from datetime import date
 
 import magic
 from google.auth.transport.requests import Request
@@ -14,12 +15,146 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 mime = magic.Magic(mime=True)
+service = None
+main_dir_id = None
+
 
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
 FOLDER_NAME = '_MEDIA_DUMPER'
 ALLOWED_FILE_TYPES = ['mp4','mp3','cr2','jpg']
+
+def main():
+
+    # detect usb thumb drive
+    usb_device = detect_usb_storage()
+
+    listOfFiles = list()
+    parent_dir = date.today().strftime("%d%m%Y")
+    parent_dir_id = None
+    for (dirpath, dirnames, filenames) in os.walk(usb_device):
+        parent_sub_dir = dirpath.replace(usb_device, '')
+        parent_sub_dir_id = None
+        for filename in filenames:
+            # error cannot reverse and get... FUCK
+            file_ext = filename.split('.')[::-1][0].lower()
+            if file_ext in ALLOWED_FILE_TYPES:
+                # create parent dir
+                if not parent_dir_id:
+                    parent_dir_id = gdrive_create_dir(parent_dir)
+                if not parent_sub_dir_id:
+                    parent_sub_dir_id = gdrive_create_dir(parent_sub_dir, parent_dir_id)
+                gdrive_upload_file(filename, dirpath + '/' + filename, parent_sub_dir_id)
+
+    # list all dirs inside DCIM
+    # if these dirs contains media files
+    # get file list
+    # create a new folder on drive
+    # and start uploading
+
+
+
+
+    # check if there is DCIM folder
+    # get files from it and upload them
+    return
+
+def gdrive_create_dir(dirname, parent_id = None):
+    '''
+    creates a folder on Google Drive
+    dirname: name of the folder
+    parent_id: id of the parent folder
+    returns the id of the created folder
+    '''
+    service = get_gdrive_service()
+
+    if not parent_id:
+        parent_id = gdrive_get_main_dir_id()
+
+    folder_metadata = {
+        'name': dirname,
+        'mimeType': 'application/vnd.google-apps.folder',
+        'parents': [parent_id]
+    }
+    dir_id = service.files().create(
+        body=folder_metadata, fields='id').execute()['id']
+    return dir_id
+
+
+def gdrive_get_main_dir_id():
+    '''
+    returns the ID of the main folder on Google Drive
+    if there's no main folder it gets created
+    '''
+    global main_dir_id
+
+    if main_dir_id:
+        return main_dir_id
+
+    service = get_gdrive_service()
+    # check if the folder already exists and get the ID
+    folders_res = service.files().list(
+        q=f"mimeType = 'application/vnd.google-apps.folder' and name = '{FOLDER_NAME}'", fields='nextPageToken, files(id, name)').execute()
+    if len(folders_res.get('files', [])):
+        main_dir_id = folders_res.get('files', [])[0]['id']
+    # create the folder if it's not existing
+    if not main_dir_id:
+        folder_metadata = {
+            'name': FOLDER_NAME,
+            'mimeType': 'application/vnd.google-apps.folder'
+        }
+        main_dir_id = service.files().create(
+            body=folder_metadata, fields='id').execute()['id']
+    return main_dir_id
+
+def gdrive_upload_file(file_name, file_location, parent_id):
+    service = get_gdrive_service()
+
+    # upload file
+    file_metadata = {
+        'name': file_name,
+        'parents': [parent_id]
+    }
+    print("START UPLOAD")
+    media = MediaFileUpload(file_location,
+                            mimetype=mime.from_file(file_location),
+                            resumable=True)
+
+    request = service.files().create(body=file_metadata,
+                                     media_body=media,
+                                     fields='id')
+    media.stream()
+    response = None
+    while response is None:
+        status, response = request.next_chunk()
+        if status:
+            print("Uploaded %d%%." % int(status.progress() * 100))
+    print("END UPLOAD")
+
+def get_gdrive_service():
+    global service
+    if not service:
+        service = build('drive', 'v3', credentials=authenticate())
+    return service
+
+def authenticate():
+    creds = None
+    print('----- AUTHENTICATING -----')
+    if os.path.exists('token.pickle'):
+        with open('token.pickle', 'rb') as token:
+            creds = pickle.load(token)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                'credentials.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+        with open('token.pickle', 'wb') as token:
+            pickle.dump(creds, token)
+    print('----- AUTH COMPLETE -----')
+    return creds
 
 def detect_usb_storage():
     print('looking for usb...')
@@ -51,100 +186,6 @@ def detect_usb_storage():
 
     print('usb found!')
     return usb_mounting_point
-
-def main():
-
-    # detect usb thumb drive
-    usb_device = detect_usb_storage()
-
-    listOfFiles = list()
-    for (dirpath, dirnames, filenames) in os.walk(usb_device):
-        parent_dir = dirpath.replace(usb_device, '')
-        parent_dir_id = None
-        for filename in filenames:
-            # error cannot reverse and get... FUCK
-            if filename.split('.').reverse()[0].lower() in ALLOWED_FILE_TYPES:
-                # create parent dir 
-                gdrive_upload_file(filename, dirpath + '/' + filename)
-
-    # list all dirs inside DCIM
-    # if these dirs contains media files
-    # get file list
-    # create a new folder on drive
-    # and start uploading
-
-
-
-
-    # check if there is DCIM folder
-    # get files from it and upload them
-    return
-
-# def gdrive_create_dir(dirname, parent):
-
-
-def gdrive_upload_file(file_name, file_location):
-    # authenticate and create a service
-    service = build('drive', 'v3', credentials=authenticate())
-
-    # check if the folder already exists and get the ID
-    folders_res = service.files().list(
-        q=f"mimeType = 'application/vnd.google-apps.folder' and name = '{FOLDER_NAME}'", fields='nextPageToken, files(id, name)').execute()
-    folder_id = None
-    if len(folders_res.get('files', [])):
-        folder_id = folders_res.get('files', [])[0]['id']
-    # create the folder if it's not existing
-    if not folder_id:
-        folder_metadata = {
-            'name': FOLDER_NAME,
-            'mimeType': 'application/vnd.google-apps.folder'
-        }
-        folder_id = service.files().create(
-            body=folder_metadata, fields='id').execute()['id']
-        print('----- MAIN FOLDER CREATED -----')
-    else:
-        print('----- MAIN FOLDER FOUND -----')
-
-    # upload file
-    file_metadata = {
-        'name': file_name,
-        'parents': [folder_id]
-    }
-    print("START UPLOAD")
-    media = MediaFileUpload(file_location,
-                            mimetype=mime.from_file(file_location),
-                            resumable=True)
-
-    request = service.files().create(body=file_metadata,
-                                     media_body=media,
-                                     fields='id')
-    media.stream()
-    response = None
-    while response is None:
-        status, response = request.next_chunk()
-        if status:
-            print("Uploaded %d%%." % int(status.progress() * 100))
-    print("END UPLOAD")
-
-
-def authenticate():
-    creds = None
-    print('----- AUTHENTICATING -----')
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
-    print('----- AUTH COMPLETE -----')
-    return creds
-
 
 if __name__ == '__main__':
     main()
