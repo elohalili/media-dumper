@@ -1,12 +1,12 @@
 from __future__ import print_function
 
-import sys
-import subprocess
-import time
 import os.path
 import pickle
-from pprint import pprint
+import subprocess
+import sys
+import time
 from datetime import date
+from pprint import pprint
 
 import magic
 from google.auth.transport.requests import Request
@@ -23,7 +23,10 @@ main_dir_id = None
 SCOPES = ['https://www.googleapis.com/auth/drive']
 
 FOLDER_NAME = '_MEDIA_DUMPER'
-ALLOWED_FILE_TYPES = ['mp4','mp3','cr2','jpg']
+ALLOWED_FILE_TYPES = ['mp4', 'mp3', 'cr2', 'jpg', 'arw']
+# TODO add constants file
+WINDOWS_DRIVES = ['C', 'D']
+
 
 def main():
 
@@ -31,7 +34,7 @@ def main():
     usb_device = detect_usb_storage()
 
     listOfFiles = list()
-    parent_dir = date.today().strftime("%d%m%Y")
+    parent_dir = date.today().strftime("%d-%m-%Y")
     parent_dir_id = None
     for (dirpath, dirnames, filenames) in os.walk(usb_device):
         parent_sub_dir = dirpath.replace(usb_device, '')
@@ -43,9 +46,11 @@ def main():
                 # create parent dir
                 if not parent_dir_id:
                     parent_dir_id = gdrive_create_dir(parent_dir)
-                if not parent_sub_dir_id:
-                    parent_sub_dir_id = gdrive_create_dir(parent_sub_dir, parent_dir_id)
-                gdrive_upload_file(filename, dirpath + '/' + filename, parent_sub_dir_id)
+                if parent_sub_dir != '' and not parent_sub_dir_id:
+                    parent_sub_dir_id = gdrive_create_dir(
+                        parent_sub_dir, parent_dir_id)
+                gdrive_upload_file(filename, dirpath + '/' +
+                                   filename, parent_sub_dir_id if parent_sub_dir_id else parent_dir_id)
 
     # list all dirs inside DCIM
     # if these dirs contains media files
@@ -53,14 +58,12 @@ def main():
     # create a new folder on drive
     # and start uploading
 
-
-
-
     # check if there is DCIM folder
     # get files from it and upload them
     return
 
-def gdrive_create_dir(dirname, parent_id = None):
+
+def gdrive_create_dir(dirname, parent_id=None):
     '''
     creates a folder on Google Drive
     dirname: name of the folder
@@ -108,6 +111,7 @@ def gdrive_get_main_dir_id():
             body=folder_metadata, fields='id').execute()['id']
     return main_dir_id
 
+
 def gdrive_upload_file(file_name, file_location, parent_id):
     service = get_gdrive_service()
 
@@ -132,11 +136,13 @@ def gdrive_upload_file(file_name, file_location, parent_id):
             print("Uploaded %d%%." % int(status.progress() * 100))
     print("END UPLOAD")
 
+
 def get_gdrive_service():
     global service
     if not service:
         service = build('drive', 'v3', credentials=authenticate())
     return service
+
 
 def authenticate():
     creds = None
@@ -156,6 +162,7 @@ def authenticate():
     print('----- AUTH COMPLETE -----')
     return creds
 
+
 def detect_usb_storage():
     print('looking for usb...')
     usb_mounting_point = None
@@ -172,20 +179,40 @@ def detect_usb_storage():
                 stdout=subprocess.PIPE)
             stdout, stderr = process.communicate()
             if len(stdout.strip()):
-                mounting_point = stdout[stdout.index('/media'):].strip() + '/DCIM/'
+                mounting_point = stdout[stdout.index(
+                    '/media'):].strip() + '/DCIM/'
                 if os.path.isdir(mounting_point):
                     usb_mounting_point = mounting_point
                     break
-        elif sys.platform.startswith('cygwin'):
+        elif sys.platform.startswith('cygwin') or sys.platform.startswith('win'):
             # windows
             # wmic logicaldisk get caption
             # and see the default ones such as C or D
             # then ls E:\\ and check for DCIM folder
-            continue
+            process = subprocess.Popen(
+                'wmic logicaldisk get caption',
+                shell=True,
+                universal_newlines=True,
+                stdout=subprocess.PIPE)
+            stdout, stderr = process.communicate()
+            mounting_points = stdout.strip().replace(
+                'Caption', '').replace(':', '').split()
+            if len(mounting_points) > 1:
+                # normally on windows C: and D: are hard drive mounting points
+                # I'll probably have to ignore them
+                for mounting_point in mounting_points:
+                    if mounting_point not in WINDOWS_DRIVES:
+                        # usb found
+                        # search for DCIM folder
+                        print(mounting_point + ':\\\\DCIM\\')
+                        if os.path.isdir(mounting_point + ':\\\\DCIM\\'):
+                            usb_mounting_point = mounting_point + ':\\\\DCIM\\'
+
         time.sleep(1)
 
     print('usb found!')
     return usb_mounting_point
+
 
 if __name__ == '__main__':
     main()

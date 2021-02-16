@@ -131,3 +131,4 @@ dmypy.json
 # auth stuff
 credentials.json
 token.pickle
+.vscode/settings.json
